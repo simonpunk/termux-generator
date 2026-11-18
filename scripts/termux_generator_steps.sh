@@ -99,6 +99,15 @@ patch_bootstraps() {
 
     apply_patches "$TERMUX_APP_TYPE-patches/bootstrap-patches" termux-packages-main
 
+	# git.kernel.org now returns HTTP 403 for dash snapshot tarballs.
+	# Use the official release files and the matching checksum for 0.5.13.6.
+	local dash_build="termux-packages-main/packages/dash/build.sh"
+	if [ -f "$dash_build" ] && grep -q 'git.kernel.org/pub/scm/utils/dash' "$dash_build"; then
+		portable_sed_i -e 's|https://git.kernel.org/pub/scm/utils/dash/dash.git/snapshot/dash-${TERMUX_PKG_VERSION}.tar.gz|http://gondor.apana.org.au/~herbert/dash/files/dash-${TERMUX_PKG_VERSION}.tar.gz|' "$dash_build"
+		portable_sed_i -e 's|TERMUX_PKG_VERSION="0.5.13.5"|TERMUX_PKG_VERSION="0.5.13.6"|' "$dash_build"
+		portable_sed_i -e 's|^TERMUX_PKG_SHA256=.*|TERMUX_PKG_SHA256=26aac476f476cef391c600cb064417d82a5465d8fc7c4fd56158c276e86538c1|' "$dash_build"
+	fi
+
 	if [[ "$TERMUX_APP__USER_PATH" != "/data/data" ]]; then
 		replace_termux_user_path termux-packages-main "$TERMUX_APP__USER_PATH"
 	fi
