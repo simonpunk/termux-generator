@@ -34,10 +34,10 @@ index 777bb13..cad9e43 100644
  }
 diff --git a/packages/dpkg/dpkg-wrapper.in b/packages/dpkg/dpkg-wrapper.in
 new file mode 100644
-index 0000000..4a1b642
+index 0000000..4ee0924
 --- /dev/null
 +++ b/packages/dpkg/dpkg-wrapper.in
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,116 @@
 +#!/@CUSTOM_USER_PATH@/com.termux/files/usr/bin/bash
 +# Rewrites paths in upstream .debs so they install into the custom user-data
 +# path instead of the primary user's /data/data/com.termux.
@@ -47,6 +47,9 @@ index 0000000..4a1b642
 +# Kept split so the generator's /data/data substitution does not rewrite these.
 +OFFICIAL_DATA_ROOT="/data""/data"
 +CUSTOM_DATA_ROOT="@CUSTOM_USER_PATH@"
++APP_ROOT="$CUSTOM_DATA_ROOT/com.termux"
++# Safety net for binaries whose embedded RUNPATH cannot be patched.
++export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 +
 +has_deb=0
 +for a in "$@"; do
@@ -55,6 +58,61 @@ index 0000000..4a1b642
 +if [ "$has_deb" -eq 0 ]; then
 +	exec "$REAL" "$@"
 +fi
++
++if [ -x "$PREFIX/bin/python3" ]; then
++	PYTHON="$PREFIX/bin/python3"
++else
++	PYTHON="$PREFIX/bin/python"
++fi
++
++# Short alias directories let equal-length ELF RUNPATH strings resolve to the
++# real prefix without changing the ELF string-table layout.
++create_aliases() {
++	mkdir -p "$APP_ROOT"
++	for d in "$PREFIX"/*; do
++		[ -d "$d" ] || continue
++		local n
++		n="$(basename "$d")"
++		if [ ! -e "$APP_ROOT/$n" ] && [ ! -L "$APP_ROOT/$n" ]; then
++			ln -s "$d" "$APP_ROOT/$n"
++		fi
++	done
++}
++
++patch_elfs() {
++	"$PYTHON" - "$1" "$APP_ROOT" <<'PY'
++import os
++import re
++import sys
++
++root, app_root = sys.argv[1], sys.argv[2]
++old_base = b"/data" + b"/data/com.termux/files/usr"
++new_base = app_root.encode()
++pattern = re.compile(re.escape(old_base) + rb"([A-Za-z0-9_.+/\-]*)")
++
++for dirpath, _, files in os.walk(root):
++    for name in files:
++        path = os.path.join(dirpath, name)
++        try:
++            with open(path, "rb") as f:
++                if f.read(4) != b"\x7fELF":
++                    continue
++            data = open(path, "rb").read()
++        except OSError:
++            continue
++
++        def repl(m):
++            new = new_base + m.group(1)
++            if len(new) > len(m.group(0)):
++                return m.group(0)
++            return new.ljust(len(m.group(0)), b"\0")
++
++        new_data = pattern.sub(repl, data)
++        if new_data != data:
++            with open(path, "r+b") as f:
++                f.write(new_data)
++PY
++}
 +
 +TMP="$(mktemp -d)"
 +trap 'rm -rf "$TMP"' EXIT
@@ -72,10 +130,17 @@ index 0000000..4a1b642
 +					mkdir -p "$D${CUSTOM_DATA_ROOT}"
 +					mv "$D${OFFICIAL_DATA_ROOT}/com.termux" "$D${CUSTOM_DATA_ROOT}/"
 +					rmdir "$D${OFFICIAL_DATA_ROOT}" 2>/dev/null || true
-+					if [ -d "$D/DEBIAN" ]; then
-+						find "$D/DEBIAN" -type f -exec \
-+							sed -i "s|${OFFICIAL_DATA_ROOT}/com\\.termux|${CUSTOM_DATA_ROOT}/com.termux|g" {} +
-+					fi
++					create_aliases
++					# Rewrite embedded paths in text files (scripts, configs,
++					# control files).
++					find "$D" -type f -print0 | while IFS= read -r -d '' f; do
++						if LC_ALL=C grep -Iq . "$f" 2>/dev/null; then
++							sed -i "s|${OFFICIAL_DATA_ROOT}/com\\.termux|${CUSTOM_DATA_ROOT}/com.termux|g" "$f"
++						fi
++					done
++					# Rewrite ELF RUNPATHs without changing their string-table
++					# offsets.
++					patch_elfs "$D"
 +				fi
 +				"$PREFIX/bin/dpkg-deb" -b "$D" "$TMP/$i.deb" >/dev/null
 +				NEW+=("$TMP/$i.deb")
