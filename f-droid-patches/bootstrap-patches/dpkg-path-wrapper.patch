@@ -34,10 +34,10 @@ index 777bb13..cad9e43 100644
  }
 diff --git a/packages/dpkg/dpkg-wrapper.in b/packages/dpkg/dpkg-wrapper.in
 new file mode 100644
-index 0000000..f569c0d
+index 0000000..3eb3c39
 --- /dev/null
 +++ b/packages/dpkg/dpkg-wrapper.in
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,163 @@
 +#!/@CUSTOM_USER_PATH@/com.termux/files/usr/bin/bash
 +# Rewrites paths in upstream .debs so they install into the custom user-data
 +# path instead of the primary user's /data/data/com.termux.
@@ -124,9 +124,11 @@ index 0000000..f569c0d
 +		*.deb)
 +			if [ -f "$a" ]; then
 +				D="$TMP/$i"
++				relocated=0
 +				mkdir -p "$D"
 +				"$PREFIX/bin/dpkg-deb" -R "$a" "$D"
 +				if [ -d "$D${OFFICIAL_DATA_ROOT}/com.termux" ]; then
++					relocated=1
 +					mkdir -p "$D${CUSTOM_DATA_ROOT}"
 +					mv "$D${OFFICIAL_DATA_ROOT}/com.termux" "$D${CUSTOM_DATA_ROOT}/"
 +					rmdir "$D${OFFICIAL_DATA_ROOT}" 2>/dev/null || true
@@ -180,6 +182,12 @@ index 0000000..f569c0d
 +						rm -f "$D/DEBIAN/conffiles"
 +					fi
 +					rm -f "$conf"
++				fi
++				# Never hand dpkg an archive that still targets the primary
++				# user's /data/data tree; fail with a clear message instead.
++				if [ "$relocated" -eq 0 ] && "$PREFIX/bin/dpkg-deb" -c "$a" 2>/dev/null | grep -qE '\./data/data(/|$)'; then
++					echo "dpkg wrapper: could not relocate paths in $a" >&2
++					exit 1
 +				fi
 +				"$PREFIX/bin/dpkg-deb" -b "$D" "$TMP/$i.deb" >/dev/null
 +				NEW+=("$TMP/$i.deb")

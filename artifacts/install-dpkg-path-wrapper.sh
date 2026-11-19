@@ -99,9 +99,11 @@ for a in "$@"; do
 		*.deb)
 			if [ -f "$a" ]; then
 				D="$TMP/$i"
+				relocated=0
 				mkdir -p "$D"
 				"$PREFIX/bin/dpkg-deb" -R "$a" "$D"
 				if [ -d "$D${OFFICIAL_DATA_ROOT}/com.termux" ]; then
+					relocated=1
 					mkdir -p "$D${CUSTOM_DATA_ROOT}"
 					mv "$D${OFFICIAL_DATA_ROOT}/com.termux" "$D${CUSTOM_DATA_ROOT}/"
 					rmdir "$D${OFFICIAL_DATA_ROOT}" 2>/dev/null || true
@@ -155,6 +157,12 @@ for a in "$@"; do
 						rm -f "$D/DEBIAN/conffiles"
 					fi
 					rm -f "$conf"
+				fi
+				# Never hand dpkg an archive that still targets the primary
+				# user's /data/data tree; fail with a clear message instead.
+				if [ "$relocated" -eq 0 ] && "$PREFIX/bin/dpkg-deb" -c "$a" 2>/dev/null | grep -qE '\./data/data(/|$)'; then
+					echo "dpkg wrapper: could not relocate paths in $a" >&2
+					exit 1
 				fi
 				"$PREFIX/bin/dpkg-deb" -b "$D" "$TMP/$i.deb" >/dev/null
 				NEW+=("$TMP/$i.deb")
