@@ -1,0 +1,28 @@
+diff --git a/packages/dialog/build.sh b/packages/dialog/build.sh
+index ce33f42..c0dae9e 100644
+--- a/packages/dialog/build.sh
++++ b/packages/dialog/build.sh
+@@ -31,3 +31,23 @@ termux_step_pre_configure() {
+ termux_step_post_make_install() {
+ 	rm "$TERMUX_PREFIX/lib/libtinfo.so"
+ }
++
++# The mirror used by TERMUX_PKG_SRCURL can serve an HTML error page with a
++# 200 status from some networks. Fall back to the canonical site and Fossies.
++termux_step_get_source() {
++	local file="$TERMUX_PKG_CACHEDIR/$(basename "$TERMUX_PKG_SRCURL")"
++	local url
++	for url in \
++		"$TERMUX_PKG_SRCURL" \
++		"https://invisible-island.net/archives/dialog/dialog-${TERMUX_PKG_VERSION}.tgz" \
++		"https://fossies.org/linux/misc/dialog-${TERMUX_PKG_VERSION}.tgz"
++	do
++		if termux_download "$url" "$file" "$TERMUX_PKG_SHA256"; then
++			cd "$TERMUX_PKG_TMPDIR"
++			termux_extract_src_archive
++			return
++		fi
++		rm -f "$file"
++	done
++	termux_error_exit "Failed to download dialog source from any mirror"
++}
