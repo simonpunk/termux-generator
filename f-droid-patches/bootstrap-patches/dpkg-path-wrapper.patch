@@ -1,8 +1,8 @@
 diff --git a/packages/dpkg/build.sh b/packages/dpkg/build.sh
-index 777bb13..b53e222 100644
+index 777bb13..cad9e43 100644
 --- a/packages/dpkg/build.sh
 +++ b/packages/dpkg/build.sh
-@@ -87,4 +87,18 @@ termux_step_post_massage() {
+@@ -87,4 +87,29 @@ termux_step_post_massage() {
  	mkdir -p "${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/var/lib/dpkg/info"
  	mkdir -p "${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/var/lib/dpkg/triggers"
  	mkdir -p "${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/var/lib/dpkg/updates"
@@ -14,6 +14,17 @@ index 777bb13..b53e222 100644
 +		"${TERMUX_PKG_BUILDER_DIR}/dpkg-wrapper.in" \
 +		> "${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/libexec/termux-generator/dpkg-wrapper"
 +	chmod +x "${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/libexec/termux-generator/dpkg-wrapper"
++
++	# Bootstrap archives are extracted directly, without running postinst, so
++	# install the wrapper and register the diversion here as well.
++	cp "${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/bin/dpkg" \
++		"${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/bin/dpkg-real"
++	cp "${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/libexec/termux-generator/dpkg-wrapper" \
++		"${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/bin/dpkg"
++	printf '%s\n%s\n:\n' \
++		"${TERMUX_PREFIX}/bin/dpkg" \
++		"${TERMUX_PREFIX}/bin/dpkg-real" \
++		> "${TERMUX_PKG_MASSAGEDIR}/${TERMUX_PREFIX}/var/lib/dpkg/diversions"
 +}
 +
 +termux_step_create_debscripts() {
@@ -80,18 +91,22 @@ index 0000000..4a1b642
 +exec "$REAL" "${NEW[@]}"
 diff --git a/packages/dpkg/postinst.in b/packages/dpkg/postinst.in
 new file mode 100644
-index 0000000..6c0ee14
+index 0000000..f704b16
 --- /dev/null
 +++ b/packages/dpkg/postinst.in
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,15 @@
 +#!/@CUSTOM_USER_PATH@/com.termux/files/usr/bin/sh
 +set -e
 +PREFIX=@CUSTOM_USER_PATH@/com.termux/files/usr
 +
 +# Keep the real dpkg binary under a different name so future upgrades of the
 +# dpkg package cannot overwrite the path-rewriting wrapper.
-+if [ ! -e "$PREFIX/bin/dpkg-real" ]; then
-+	"$PREFIX/bin/dpkg-divert" --local --divert "$PREFIX/bin/dpkg-real" --rename --add "$PREFIX/bin/dpkg"
++if ! grep -Fqx "$PREFIX/bin/dpkg" "$PREFIX/var/lib/dpkg/diversions" 2>/dev/null; then
++	if [ -e "$PREFIX/bin/dpkg-real" ]; then
++		"$PREFIX/bin/dpkg-divert" --local --divert "$PREFIX/bin/dpkg-real" --add "$PREFIX/bin/dpkg"
++	else
++		"$PREFIX/bin/dpkg-divert" --local --divert "$PREFIX/bin/dpkg-real" --rename --add "$PREFIX/bin/dpkg"
++	fi
 +fi
 +cp -f "$PREFIX/libexec/termux-generator/dpkg-wrapper" "$PREFIX/bin/dpkg"
 +chmod +x "$PREFIX/bin/dpkg"
