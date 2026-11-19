@@ -34,10 +34,10 @@ index 777bb13..cad9e43 100644
  }
 diff --git a/packages/dpkg/dpkg-wrapper.in b/packages/dpkg/dpkg-wrapper.in
 new file mode 100644
-index 0000000..40d186b
+index 0000000..4c4b51e
 --- /dev/null
 +++ b/packages/dpkg/dpkg-wrapper.in
-@@ -0,0 +1,121 @@
+@@ -0,0 +1,130 @@
 +#!/@CUSTOM_USER_PATH@/com.termux/files/usr/bin/bash
 +# Rewrites paths in upstream .debs so they install into the custom user-data
 +# path instead of the primary user's /data/data/com.termux.
@@ -146,6 +146,15 @@ index 0000000..40d186b
 +					# Rewrite ELF RUNPATHs without changing their string-table
 +					# offsets.
 +					patch_elfs "$D"
++				fi
++				# Termux repo debs ship maintainer scripts as 0644, which
++				# dpkg accepts but dpkg-deb -b rejects. Restore 0755.
++				if [ -d "$D/DEBIAN" ]; then
++					for s in postinst preinst prerm postrm config; do
++						if [ -f "$D/DEBIAN/$s" ]; then
++							chmod 755 "$D/DEBIAN/$s"
++						fi
++					done
 +				fi
 +				"$PREFIX/bin/dpkg-deb" -b "$D" "$TMP/$i.deb" >/dev/null
 +				NEW+=("$TMP/$i.deb")
