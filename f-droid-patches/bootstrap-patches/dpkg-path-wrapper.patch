@@ -34,10 +34,10 @@ index 777bb13..cad9e43 100644
  }
 diff --git a/packages/dpkg/dpkg-wrapper.in b/packages/dpkg/dpkg-wrapper.in
 new file mode 100644
-index 0000000..4ee0924
+index 0000000..40d186b
 --- /dev/null
 +++ b/packages/dpkg/dpkg-wrapper.in
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,121 @@
 +#!/@CUSTOM_USER_PATH@/com.termux/files/usr/bin/bash
 +# Rewrites paths in upstream .debs so they install into the custom user-data
 +# path instead of the primary user's /data/data/com.termux.
@@ -135,7 +135,12 @@ index 0000000..4ee0924
 +					# control files).
 +					find "$D" -type f -print0 | while IFS= read -r -d '' f; do
 +						if LC_ALL=C grep -Iq . "$f" 2>/dev/null; then
-+							sed -i "s|${OFFICIAL_DATA_ROOT}/com\\.termux|${CUSTOM_DATA_ROOT}/com.termux|g" "$f"
++							# Write back into the existing file so permissions
++							# (especially on maintainer scripts) are preserved.
++							sedtmp="$(mktemp "$TMP/sed.XXXXXX")"
++							sed "s|${OFFICIAL_DATA_ROOT}/com\\.termux|${CUSTOM_DATA_ROOT}/com.termux|g" "$f" > "$sedtmp"
++							cat "$sedtmp" > "$f"
++							rm -f "$sedtmp"
 +						fi
 +					done
 +					# Rewrite ELF RUNPATHs without changing their string-table
