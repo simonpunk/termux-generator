@@ -34,10 +34,10 @@ index 777bb13..cad9e43 100644
  }
 diff --git a/packages/dpkg/dpkg-wrapper.in b/packages/dpkg/dpkg-wrapper.in
 new file mode 100644
-index 0000000..4c4b51e
+index 0000000..f569c0d
 --- /dev/null
 +++ b/packages/dpkg/dpkg-wrapper.in
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,155 @@
 +#!/@CUSTOM_USER_PATH@/com.termux/files/usr/bin/bash
 +# Rewrites paths in upstream .debs so they install into the custom user-data
 +# path instead of the primary user's /data/data/com.termux.
@@ -155,6 +155,31 @@ index 0000000..4c4b51e
 +							chmod 755 "$D/DEBIAN/$s"
 +						fi
 +					done
++				fi
++				# Some packages list conffiles that are absent from the
++				# archive (e.g. busybox service log/down files). dpkg
++				# tolerates that, but dpkg-deb -b refuses to build.
++				if [ -f "$D/DEBIAN/conffiles" ]; then
++					conf="$TMP/conffiles.$$"
++					: > "$conf"
++					while IFS= read -r c; do
++						[ -n "$c" ] || continue
++						case "$c" in
++							\#*) printf '%s\n' "$c" >> "$conf" ;;
++							*)
++								rel="${c#/}"
++								if [ -e "$D/$rel" ] || [ -L "$D/$rel" ]; then
++									printf '%s\n' "$c" >> "$conf"
++								fi
++								;;
++						esac
++					done < "$D/DEBIAN/conffiles"
++					if [ -s "$conf" ]; then
++						cat "$conf" > "$D/DEBIAN/conffiles"
++					else
++						rm -f "$D/DEBIAN/conffiles"
++					fi
++					rm -f "$conf"
 +				fi
 +				"$PREFIX/bin/dpkg-deb" -b "$D" "$TMP/$i.deb" >/dev/null
 +				NEW+=("$TMP/$i.deb")
