@@ -1,0 +1,12 @@
+diff --git a/scripts/build/termux_download.sh b/scripts/build/termux_download.sh
+index b3205cd..4e39ded 100755
+--- a/scripts/build/termux_download.sh
++++ b/scripts/build/termux_download.sh
+@@ -38,6 +38,7 @@ termux_download() {
+ 	local -a CURL_OPTIONS=(
+ 		--fail               # Consider 4xx and 5xx responses as failures
+ 		--retry 5            # Retry up to 5 times on transient failures
++		--retry-all-errors   # Also retry timeouts and other transient errors
+ 		--retry-connrefused  # Also retry on refused connections
+ 		--retry-delay 5      # Wait 5 seconds between retries
+ 		--connect-timeout 30 # Wait at most 30 seconds for a connection to be established
