@@ -1,18 +1,11 @@
-# Paste this whole block into Termux. It replaces the existing dpkg wrapper
-# with one that rewrites text files, ELF RUNPATHs, maintainer script modes and
-# stale conffile entries in upstream .debs.
+# Paste this whole block into Termux. It restores the dpkg wrapper, its
+# libexec source, the diversion entry, and removes our custom files from
+# dpkg's ownership lists so future upgrades cannot delete them.
 
 PREFIX=/data/user/10/com.termux/files/usr
+mkdir -p "$PREFIX/libexec/termux-generator"
 
-if ! grep -Fqx "$PREFIX/bin/dpkg" "$PREFIX/var/lib/dpkg/diversions" 2>/dev/null; then
-  if [ -x "$PREFIX/bin/dpkg-real" ]; then
-    "$PREFIX/bin/dpkg-divert" --local --divert "$PREFIX/bin/dpkg-real" --add "$PREFIX/bin/dpkg"
-  else
-    "$PREFIX/bin/dpkg-divert" --local --divert "$PREFIX/bin/dpkg-real" --rename --add "$PREFIX/bin/dpkg"
-  fi
-fi
-
-cat > "$PREFIX/bin/dpkg" <<'WRAPPER_EOF'
+cat > "$PREFIX/libexec/termux-generator/dpkg-wrapper" <<'WRAPPER_EOF'
 #!//data/user/10/com.termux/files/usr/bin/bash
 # Rewrites paths in upstream .debs so they install into the custom user-data
 # path instead of the primary user's /data/data/com.termux.
@@ -177,7 +170,25 @@ for a in "$@"; do
 done
 exec "$REAL" "${NEW[@]}"
 WRAPPER_EOF
-
+chmod +x "$PREFIX/libexec/termux-generator/dpkg-wrapper"
+cp "$PREFIX/libexec/termux-generator/dpkg-wrapper" "$PREFIX/bin/dpkg"
 chmod +x "$PREFIX/bin/dpkg"
-echo "Installed updated dpkg path-rewrite wrapper."
+
+# Register the diversion so dpkg upgrades write the real binary to dpkg-real.
+if ! grep -Fqx "$PREFIX/bin/dpkg" "$PREFIX/var/lib/dpkg/diversions" 2>/dev/null; then
+  if [ -x "$PREFIX/bin/dpkg-real" ]; then
+    "$PREFIX/bin/dpkg-divert" --local --divert "$PREFIX/bin/dpkg-real" --add "$PREFIX/bin/dpkg" 2>/dev/null || true
+  fi
+  if ! grep -Fqx "$PREFIX/bin/dpkg" "$PREFIX/var/lib/dpkg/diversions" 2>/dev/null; then
+    printf '%s\n%s\n:\n' "$PREFIX/bin/dpkg" "$PREFIX/bin/dpkg-real" > "$PREFIX/var/lib/dpkg/diversions"
+  fi
+fi
+
+# Stop dpkg from owning our injected files; otherwise the next dpkg upgrade
+# deletes them again.
+for f in "$PREFIX/var/lib/dpkg/info/dpkg.list" "$PREFIX/var/lib/dpkg/info/dpkg.md5sums"; do
+  [ -f "$f" ] && sed -i -E '/bin\/dpkg-real$|libexec\/termux-generator|var\/lib\/dpkg\/diversions$/d' "$f"
+done
+
+echo "Restored dpkg wrapper, diversion and ownership exclusions."
 echo "Now run: apt-get install -f && pkg upgrade"
