@@ -1,0 +1,23 @@
+diff --git a/packages/termux-am/build.sh b/packages/termux-am/build.sh
+index 4f42d36..9bfeeea 100644
+--- a/packages/termux-am/build.sh
++++ b/packages/termux-am/build.sh
+@@ -33,8 +33,16 @@ termux_step_make() {
+ 	export ANDROID_HOME
+ 	export GRADLE_OPTS="-Dorg.gradle.daemon=false -Xmx1536m -Dorg.gradle.java.home=/usr/lib/jvm/java-1.17.0-openjdk-amd64"
+ 
+-	$TERMUX_PKG_TMPDIR/gradle/gradle-$_GRADLE_VERSION/bin/gradle \
+-		:app:assembleRelease
++	local attempt=0
++	until $TERMUX_PKG_TMPDIR/gradle/gradle-$_GRADLE_VERSION/bin/gradle \
++		:app:assembleRelease; do
++		attempt=$((attempt + 1))
++		if [ "$attempt" -ge 3 ]; then
++			return 1
++		fi
++		echo "Gradle build failed; retrying ($attempt/3) in 10s..."
++		sleep 10
++	done
+ }
+ 
+ termux_step_make_install() {
