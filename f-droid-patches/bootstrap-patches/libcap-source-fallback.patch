@@ -1,0 +1,26 @@
+diff --git a/packages/libcap/build.sh b/packages/libcap/build.sh
+index 58164fb..a922ecf 100644
+--- a/packages/libcap/build.sh
++++ b/packages/libcap/build.sh
+@@ -18,3 +18,21 @@ termux_step_make() {
+ termux_step_make_install() {
+ 	make CC="$CC -Wl,-rpath=$TERMUX_PREFIX/lib -Wl,--enable-new-dtags" OBJCOPY=llvm-objcopy prefix="$TERMUX_PREFIX" RAISE_SETFCAP=no lib=/lib PTHREADS=no install PAM_CAP=no
+ }
++
++# kernel.org can time out from some networks; try the edge mirror as fallback.
++termux_step_get_source() {
++	local file="$TERMUX_PKG_CACHEDIR/$(basename "$TERMUX_PKG_SRCURL")"
++	local url
++	for url in \
++		"$TERMUX_PKG_SRCURL" \
++		"https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-${TERMUX_PKG_VERSION}.tar.xz"
++	do
++		if termux_download "$url" "$file" "$TERMUX_PKG_SHA256"; then
++			cd "$TERMUX_PKG_TMPDIR"
++			termux_extract_src_archive
++			return
++		fi
++		rm -f "$file"
++	done
++	termux_error_exit "Failed to download libcap source from any mirror"
++}
